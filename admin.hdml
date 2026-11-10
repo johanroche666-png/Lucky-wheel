@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ta"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR Generator (Admin)</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:900px;margin:0 auto;padding:16px;background:#1a0630;color:#fff}
+input[type=text]{width:100%;padding:10px;border-radius:8px;border:0;margin:6px 0}
+button{padding:12px 18px;border:0;border-radius:24px;font-weight:700;background:linear-gradient(90deg,#ffd54f,#ff4081);margin:4px 4px 4px 0;cursor:pointer}
+button:disabled{opacity:.4}
+#msg{margin:10px 0;color:#ffe082;font-weight:600}
+#grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:14px}
+#grid img{width:100%;background:#fff;border-radius:6px}
+@media print{body{background:#fff}.no-print{display:none}#grid{grid-template-columns:repeat(4,1fr);gap:6px}#grid img{break-inside:avoid;border:1px solid #ccc}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head><body>
+<div class="no-print">
+<h2>🎡 100 QR Generator</h2>
+<label>Wheel page URL (index.html):</label>
+<input type="text" id="base">
+<label><input type="checkbox" id="lbl" checked> QR படத்தில் No. மற்றும் செய்தியை (Gift/Next chance/Free/Thank you) காட்டு</label><br>
+<button id="go">1) 100 QR உருவாக்கி Firebase இல் Upload செய்</button>
+<button id="zip" disabled>2) ZIP (100 PNG)</button>
+<button id="csv" disabled>3) CSV பட்டியல்</button>
+<button id="prt" disabled>4) Print / PDF</button>
+<div id="msg"></div>
+</div>
+<div id="grid"></div>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {getFirestore,doc,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import {firebaseConfig} from "./firebase-config.js";
+const G=[2,14,26,38,50,52,64,76,88,99],N=[6,12,28,34,46,58,70,74,83,95],F=[19,42,67,78,100];
+const cat=n=>G.includes(n)?"gift":N.includes(n)?"next":F.includes(n)?"free":"thanks";
+const NAME={gift:"Gift or cash",next:"Next chance",free:"Free",thanks:"Thank you"};
+const COL={gift:"#b37400",next:"#0077a3",free:"#00803f",thanks:"#8E24AA"};
+const $=id=>document.getElementById(id),p3=n=>String(n).padStart(3,"0");
+$("base").value=location.href.replace(/admin\.html.*$/,"index.html").split("?")[0];
+const rnd=n=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]%n};
+const tokenId=()=>{const c="abcdefghjkmnpqrstuvwxyz23456789";let t="";for(let i=0;i<12;i++)t+=c[rnd(c.length)];return t};
+let recs=[],canv=[];
+try{const s=localStorage.getItem("wheelRecs");if(s){recs=JSON.parse(s);setTimeout(render,0);$("msg").textContent="முன்பு உருவாக்கிய 100 QR மீண்டும் காட்டப்படுகிறது."}}catch(e){}
+function mk(r){
+ const q=qrcode(0,"M");q.addData($("base").value.trim()+"?t="+r.token);q.make();
+ const m=q.getModuleCount(),cs=Math.floor(480/m),Q=cs*m,W=600,H=760,c=document.createElement("canvas");c.width=W;c.height=H;
+ const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,W,H);x.fillStyle="#2b0a3d";x.fillRect(0,0,W,70);
+ x.fillStyle="#ffd54f";x.font="700 30px sans-serif";x.textAlign="center";x.fillText("SCAN & SPIN",W/2,46);
+ const ox=(W-Q)/2,oy=100;x.fillStyle="#000";
+ for(let a=0;a<m;a++)for(let b=0;b
