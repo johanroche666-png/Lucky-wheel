@@ -18,6 +18,7 @@ button:disabled{opacity:.4}
 <h2>🎡 100 QR Generator</h2>
 <label>Wheel page URL (index.html):</label>
 <input type="text" id="base">
+<script>document.getElementById("base").value=location.href.replace(/admin\.html.*$/,"index.html").split("?")[0];</script>
 <label><input type="checkbox" id="lbl" checked> QR படத்தில் No. மற்றும் செய்தியை (Gift/Next chance/Free/Thank you) காட்டு</label><br>
 <button id="go">1) 100 QR உருவாக்கி Firebase இல் Upload செய்</button>
 <button id="zip" disabled>2) ZIP (100 PNG)</button>
@@ -27,15 +28,15 @@ button:disabled{opacity:.4}
 </div>
 <div id="grid"></div>
 <script type="module">
-import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {getFirestore,doc,writeBatch} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import {firebaseConfig} from "./firebase-config.js";
+let initializeApp,getFirestore,doc,writeBatch,firebaseConfig;
 const G=[2,14,26,38,50,52,64,76,88,99],N=[6,12,28,34,46,58,70,74,83,95],F=[19,42,67,78,100];
 const cat=n=>G.includes(n)?"gift":N.includes(n)?"next":F.includes(n)?"free":"thanks";
 const NAME={gift:"Gift or cash",next:"Next chance",free:"Free",thanks:"Thank you"};
 const COL={gift:"#b37400",next:"#0077a3",free:"#00803f",thanks:"#8E24AA"};
 const $=id=>document.getElementById(id),p3=n=>String(n).padStart(3,"0");
-$("base").value=location.href.replace(/admin\.html.*$/,"index.html").split("?")[0];
+try{const A=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),Fs=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"),C=await import("./firebase-config.js");
+initializeApp=A.initializeApp;getFirestore=Fs.getFirestore;doc=Fs.doc;writeBatch=Fs.writeBatch;firebaseConfig=C.firebaseConfig}
+catch(e){$("msg").textContent="❌ Firebase ஏற்ற முடியவில்லை: "+e.message}
 const rnd=n=>{const a=new Uint32Array(1);crypto.getRandomValues(a);return a[0]%n};
 const tokenId=()=>{const c="abcdefghjkmnpqrstuvwxyz23456789";let t="";for(let i=0;i<12;i++)t+=c[rnd(c.length)];return t};
 let recs=[],canv=[];
@@ -46,4 +47,42 @@ function mk(r){
  const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,W,H);x.fillStyle="#2b0a3d";x.fillRect(0,0,W,70);
  x.fillStyle="#ffd54f";x.font="700 30px sans-serif";x.textAlign="center";x.fillText("SCAN & SPIN",W/2,46);
  const ox=(W-Q)/2,oy=100;x.fillStyle="#000";
- for(let a=0;a<m;a++)for(let b=0;b
+ for(let a=0;a<m;a++)for(let b=0;b<m;b++)if(q.isDark(a,b))x.fillRect(ox+b*cs,oy+a*cs,cs,cs);
+ if($("lbl").checked){x.fillStyle=COL[r.cat];x.font="800 84px sans-serif";x.fillText("No. "+r.n,W/2,oy+Q+95);x.font="700 40px sans-serif";x.fillText(NAME[r.cat],W/2,oy+Q+150)}
+ else{x.fillStyle="#333";x.font="700 56px sans-serif";x.fillText("QR "+p3(r.serial),W/2,oy+Q+95)}
+ return c}
+function render(){
+ canv=recs.map(mk);$("grid").innerHTML="";
+ canv.forEach(c=>{const i=new Image();i.src=c.toDataURL();$("grid").appendChild(i)});
+ ["zip","csv","prt"].forEach(k=>$(k).disabled=false)}
+$("lbl").onchange=()=>recs.length&&render();
+$("base").onchange=()=>recs.length&&render();
+const dl=(b,n)=>{const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=n;a.click()};
+$("go").onclick=async()=>{
+ const base=$("base").value.trim();
+ if(!base.startsWith("http")){alert("Wheel page URL சரியாக இல்லை");return}
+ if(recs.length&&!confirm("ஏற்கனவே QR உருவாக்கப்பட்டுள்ளன. புதியவை உருவாக்கினால் பழைய QR கள் செல்லாது (Rules பூட்டியிருந்தால் upload தோல்வியடையும்). தொடரவா?"))return;
+ $("go").disabled=true;$("msg").textContent="Upload செய்கிறது...";
+ const nums=[...Array(100)].map((_,i)=>i+1);
+ for(let i=99;i>0;i--){const j=rnd(i+1);[nums[i],nums[j]]=[nums[j],nums[i]]}
+ const th=nums.filter(n=>cat(n)==="thanks");
+ const nr=nums.map((n,i)=>{const k=cat(n),r={serial:i+1,token:tokenId(),n,cat:k};if(k==="next")r.n2=th[rnd(th.length)];return r});
+ try{
+  const db=getFirestore(initializeApp(firebaseConfig)),b=writeBatch(db);
+  nr.forEach(r=>{const d={n:r.n,cat:r.cat,spins:0};if(r.n2)d.n2=r.n2;b.set(doc(db,"tokens",r.token),d)});
+  await b.commit();
+ }catch(e){$("msg").textContent="❌ Upload தோல்வி: firebase-config.js மற்றும் Rules Step 1 ஐ சரிபாருங்கள். ("+e.code+")";$("go").disabled=false;return}
+ recs=nr;try{localStorage.setItem("wheelRecs",JSON.stringify(recs))}catch(e){}
+ render();$("go").disabled=false;
+ $("msg").textContent="✅ 100 QR உருவாக்கப்பட்டு Upload ஆனது! இப்போதே ZIP & CSV ஐ download செய்து, Firebase Rules ஐ Step 2 (final) ஆக மாற்றுங்கள்."};
+$("zip").onclick=async()=>{
+ $("msg").textContent="ZIP தயாராகிறது...";const z=new JSZip();
+ for(let i=0;i<recs.length;i++){const r=recs[i];const b=await new Promise(res=>canv[i].toBlob(res,"image/png"));
+  z.file($("lbl").checked?`QR_${p3(r.serial)}_No${r.n}_${NAME[r.cat].replace(/ /g,"-")}.png`:`QR_${p3(r.serial)}.png`,b)}
+ dl(await z.generateAsync({type:"blob"}),"100_QR_codes.zip");$("msg").textContent="✅ ZIP download ஆனது"};
+$("csv").onclick=()=>{
+ const base=$("base").value.trim();
+ const rows=["QR_no,prize_number,message,second_spin_number,link"].concat(recs.map(r=>[r.serial,r.n,NAME[r.cat],r.n2||"",base+"?t="+r.token].join(",")));
+ dl(new Blob(["\ufeff"+rows.join("\n")],{type:"text/csv"}),"QR_list_PRIVATE.csv")};
+$("prt").onclick=()=>window.print();
+</script></body></html>
