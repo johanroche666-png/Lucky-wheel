@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ta"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>பரிசு சக்கரம் – Prize Wheel</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:14px;color:#fff;font-family:system-ui,"Noto Sans Tamil",sans-serif;background:radial-gradient(circle at 50% 30%,#4a1470 0%,#1a0630 60%,#0b0218 100%)}
+h1{margin:0;font-size:clamp(22px,5vw,38px);letter-spacing:1px;background:linear-gradient(90deg,#ffd54f,#ff4081,#40c4ff);-webkit-background-clip:text;background-clip:text;color:transparent;text-align:center}
+.stage{position:relative;width:min(94vw,640px);aspect-ratio:1}
+canvas{width:100%;height:100%;display:block;filter:drop-shadow(0 10px 30px rgba(255,64,129,.45))}
+.pointer{position:absolute;left:50%;top:-6px;width:0;height:0;transform:translateX(-50%);border-left:20px solid transparent;border-right:20px solid transparent;border-top:42px solid #fff;filter:drop-shadow(0 3px 6px #000);z-index:3}
+.pointer::after{content:"";position:absolute;left:-9px;top:-38px;border-left:9px solid transparent;border-right:9px solid transparent;border-top:24px solid #ff1744}
+#spin{position:absolute;left:50%;top:50%;width:19%;aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;border:4px solid #fff;cursor:pointer;font-weight:800;font-size:clamp(12px,3vw,20px);color:#2b0a3d;background:radial-gradient(circle at 35% 30%,#fff8c4,#ffc400 60%,#ff8f00);box-shadow:0 0 0 6px rgba(255,255,255,.25),0 6px 18px #000a;z-index:4;animation:pulse 1.4s infinite}
+#spin:disabled{animation:none;filter:grayscale(.6);cursor:default}
+@keyframes pulse{50%{box-shadow:0 0 0 14px rgba(255,214,0,.0),0 0 28px 8px rgba(255,214,0,.8)}}
+#status{min-height:24px;text-align:center;font-weight:600;color:#ffe082;font-size:15px}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;justify-content:center;font-size:13px}
+.legend span{display:flex;align-items:center;gap:6px;background:#ffffff14;padding:5px 10px;border-radius:20px}
+.legend i{width:12px;height:12px;border-radius:50%;display:inline-block}
+#modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:#000a;z-index:10;padding:20px}
+#modal.show{display:flex}
+.card{text-align:center;padding:30px 36px;border-radius:24px;max-width:360px;width:100%;border:3px solid #fff;box-shadow:0 0 60px var(--c);background:linear-gradient(160deg,#2b0a3d,#12041f);animation:pop .5s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{from{transform:scale(.3);opacity:0}}
+.card .n{font-size:84px;font-weight:900;line-height:1;color:var(--c)}
+.card .t{font-size:26px;font-weight:800;margin:10px 0 4px}
+.card button{margin-top:18px;padding:12px 28px;border:0;border-radius:30px;font-weight:700;font-size:16px;background:linear-gradient(90deg,#ffd54f,#ff4081);color:#1a0630;cursor:pointer}
+</style></head><body>
+<h1>🎡 அதிர்ஷ்ட பரிசு சக்கரம்</h1>
+<div id="status"></div>
+<div class="stage"><div class="pointer"></div><canvas id="c"></canvas><button id="spin">சுழற்று<br>SPIN</button></div>
+<div class="legend" id="legend"></div>
+<div id="modal"><div class="card" id="card"><div class="n" id="rn"></div><div class="t" id="rt"></div><div id="rm"></div><button id="again">மூடு / Close</button></div></div>
+<script type="module">
+let doc,runTransaction;
+const G=[2,14,26,38,50,52,64,76,88,99],N=[6,12,28,34,46,58,70,74,83,95],F=[19,42,67,78,100];
+const CAT={gift:{name:"Gift or cash",col:"#FFC400",txt:"#3b2400",msg:"🎁 வாழ்த்துக்கள்! உங்களுக்கு பரிசு அல்லது பணம்!"},
+next:{name:"Next chance",col:"#00E5FF",txt:"#00303a",msg:"🔁 மீண்டும் ஒரு வாய்ப்பு!"},
+free:{name:"Free",col:"#00E676",txt:"#00381b",msg:"🎉 இலவசம்! வாழ்த்துக்கள்!"},
+thanks:{name:"Thank you",col:"#C2185B",txt:"#fff",msg:"🙏 நன்றி! அடுத்த முறை முயற்சிக்கவும்."}};
+const cat=n=>G.includes(n)?"gift":N.includes(n)?"next":F.includes(n)?"free":"thanks";
+const S=100,SEG=360/S;
+const cv=document.getElementById("c"),ctx=cv.getContext("2d");
+let size=0,rot=0,spinning=false,audio=null;
+function resize(){const r=cv.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);size=Math.round(r.width*d);cv.width=cv.height=size;draw()}
+function draw(t=0){
+const s=size,c=s/2,R=c*.93,rad=Math.PI/180;ctx.clearRect(0,0,s,s);
+let g=ctx.createRadialGradient(c,c,R,c,c,c);g.addColorStop(0,"#ffe082");g.addColorStop(.5,"#ff8f00");g.addColorStop(1,"#7a3b00");
+ctx.beginPath();ctx.arc(c,c,c-2,0,7);ctx.fillStyle=g;ctx.fill();
+for(let i=0;i<24;i++){const a=i*15*rad,on=(Math.floor(t/250)+i)%2===0;ctx.beginPath();ctx.arc(c+Math.cos(a)*(c*.965),c+Math.sin(a)*(c*.965),s*.011,0,7);ctx.fillStyle=on?"#fff":"#ff4081";ctx.shadowColor=on?"#fff":"#ff4081";ctx.shadowBlur=10;ctx.fill();ctx.shadowBlur=0}
+const inner=R*.985;
+for(let i=0;i<S;i++){
+const n=i+1,k=cat(n),a0=(-90+rot+i*SEG)*rad,a1=a0+SEG*rad;
+ctx.beginPath();ctx.moveTo(c,c);ctx.arc(c,c,inner,a0,a1);ctx.closePath();
+ctx.fillStyle=k==="thanks"?(i%2?"#8E24AA":"#C2185B"):CAT[k].col;ctx.fill();
+ctx.strokeStyle="rgba(255,255,255,.55)";ctx.lineWidth=k==="thanks"?.6:1.2;ctx.stroke();
+ctx.save();ctx.translate(c,c);ctx.rotate(a0+SEG*rad/2);ctx.textAlign="right";ctx.textBaseline="middle";
+ctx.font=(k==="thanks"?"600 ":"800 ")+(s*(k==="thanks"?.0215:.025))+"px system-ui";ctx.fillStyle=CAT[k].txt;ctx.fillText(n,inner-s*.012,0);ctx.restore();}
+ctx.beginPath();ctx.arc(c,c,R*.3,0,7);ctx.fillStyle="#12041f";ctx.fill();
+ctx.lineWidth=s*.012;ctx.strokeStyle="#ffd54f";ctx.stroke();
+}
+function tick(){
+try{audio=audio||new (window.AudioContext||window.webkitAudioContext)();
+const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime;
+o.type="triangle";o.frequency.setValueAtTime(1500,t);o.frequency.exponentialRampToValueAtTime(500,t+.04);
+g.gain.setValueAtTime(.22,t);g.gain.exponentialRampToValueAtTime(.001,t+.05);
+o.connect(g).connect(audio.destination);o.start(t);o.stop(t+.06)}catch(e){}}
+function fanfare(){try{[523,659,784,1047].forEach((f,i)=>{const o=audio.createOscillator(),g=audio.createGain(),t=audio.currentTime+i*.12;
+o.type="sine";o.frequency.value=f;g.gain.setValueAtTime(.2,t);g.gain.exponentialRampToValueAtTime(.001,t+.3);o.connect(g).connect(audio.destination);o.start(t);o.stop(t+.32)})}catch(e){}}
+const ease=t=>1-Math.pow(1-t,4),DUR=20000;
+function spin(idx){spinning=true;btn.disabled=true;
+try{audio=audio||new (window.AudioContext||window.webkitAudioContext)();audio.resume()}catch(e){}
+const target=((-(idx+.5)*SEG)%360+360)%360,cur=((rot%360)+360)%360;
+let delta=(target-cur+360)%360;
+const total=delta+360*14,start=rot,t0=performance.now();let last=-1,lastT=0;
+(function f(now){
+const p=Math.min((now-t0)/DUR,1);rot=start+total*ease(p);
+const ci=Math.floor((((-rot)%360)+360)%360/SEG);
+if(ci!==last){if(last!==-1&&now-lastT>22){tick();lastT=now}last=ci}
+draw(now);
+if(p<1)requestAnimationFrame(f);else{spinning=false;done(idx+1)}
+})(t0);}
+function show(n){const k=cat(n),C=CAT[k];fanfare();
+document.getElementById("card").style.setProperty("--c",C.col==="#C2185B"?"#ff80ab":C.col);
+rn.textContent=n;rt.textContent=C.name;rm.textContent=C.msg;modal.classList.add("show")}
+const btn=document.getElementById("spin"),modal=document.getElementById("modal"),rn=document.getElementById("rn"),rt=document.getElementById("rt"),rm=document.getElementById("rm");
+const st=document.getElementById("status"),tk=new URLSearchParams(location.search).get("t");
+let db,ref,data;const say=m=>st.textContent=m;
+const allowed=()=>data.n2?2:1;
+function ui(modal){
+ if(!data.spins){say("SPIN ஐ அழுத்தி சுழற்றுங்கள்! 🎡");btn.disabled=false}
+ else if(data.spins<allowed()){say("🔁 Next chance! இன்னும் ஒரு முறை சுழற்றலாம்");btn.disabled=false}
+ else{say("✅ இந்த QR ஏற்கனவே பயன்படுத்தப்பட்டுவிட்டது");btn.disabled=true;if(modal)show(data.n2||data.n)}}
+function done(n){ui(false);show(n)}
+btn.disabled=true;
+(async()=>{
+ if(!tk){say("QR code ஐ scan செய்து வரவும்");return}
+ try{const A=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),Fs=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"),C=await import("./firebase-config.js");
+  doc=Fs.doc;runTransaction=Fs.runTransaction;db=Fs.getFirestore(A.initializeApp(C.firebaseConfig));ref=doc(db,"tokens",tk);
+  const s=await Fs.getDoc(ref);if(!s.exists()){say("❌ தவறான QR code");return}
+  data=s.data();ui(true)}catch(e){say("இணைப்பு பிழை – மீண்டும் முயற்சிக்கவும்")}})();
+btn.onclick=async()=>{
+ if(spinning||!ref)return;btn.disabled=true;
+ try{const r=await runTransaction(db,async tx=>{const s=await tx.get(ref);const d=s.data();
+   if(d.spins>=(d.n2?2:1))throw new Error("used");tx.update(ref,{spins:d.spins+1});return d});
+  const sp=r.spins;data={...r,spins:sp+1};say("🎡 சுழல்கிறது...");spin((sp===0?r.n:r.n2)-1)}
+ catch(e){say("⛔ இந்த QR ஏற்கனவே பயன்படுத்தப்பட்டுவிட்டது");btn.disabled=true}};
+document.getElementById("again").onclick=()=>modal.classList.remove("show");
+document.getElementById("legend").innerHTML=Object.values(CAT).map(c=>`<span><i style="background:${c.col}"></i>${c.name}</span>`).join("");
+addEventListener("resize",resize);resize();
+(function idle(now){if(!spinning)draw(now);requestAnimationFrame(idle)})(0);
+</script></body></html>
