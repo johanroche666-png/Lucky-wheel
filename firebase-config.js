@@ -1,0 +1,1 @@
+export const firebaseConfig = {   apiKey: "AIzaSyD-_JIiSpgKBeN0NBggZVfnN5UNGcpehNY",   authDomain: "prizw-wheel.firebaseapp.com",   projectId: "prizw-wheel",   storageBucket: "prizw-wheel.firebasestorage.app",   messagingSenderId: "789824804884",   appId: "1:789824804884:web:138e0756fea14b94a8ef01" };
